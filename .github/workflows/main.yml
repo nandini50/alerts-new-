@@ -1,0 +1,93 @@
+name: Create New Relic Alert
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  create-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Create New Relic Alert Policy
+        env:
+          NEW_RELIC_API_KEY: ${{ secrets.NEW_RELIC_API_KEY }}
+        run: |
+          POLICY_ID=$(curl -X POST 'https://api.newrelic.com/v2/alerts_policies.json' \
+            -H 'X-Api-Key: '${{ secrets.NEW_RELIC_API_KEY }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "policy": {
+                "name": "Example Alert Policy",
+                "incident_preference": "PER_POLICY"
+              }
+            }' | jq -r '.policy.id')
+
+          echo "Created New Relic Alert Policy with ID: $POLICY_ID"
+
+      - name: Create New Relic NRQL Alert Condition
+        env:
+          NEW_RELIC_API_KEY: ${{ secrets.NEW_RELIC_API_KEY }}
+        run: |
+          curl -X POST 'https://api.newrelic.com/v2/alerts_conditions/policies/'$POLICY_ID'.json' \
+            -H 'X-Api-Key: '${{ secrets.NEW_RELIC_API_KEY }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "condition": {
+                "type": "static",
+                "name": "High JavaScript Errors",
+                "enabled": true,
+                "account_id": 4440025,
+                "description": "Alert when JavaScript errors are high",
+                "runbook_url": "https://www.example.com",
+                "violation_time_limit_seconds": 3600,
+                "fill_option": "static",
+                "fill_value": 1.0,
+                "aggregation_window": 60,
+                "aggregation_method": "event_flow",
+                "aggregation_delay": 120,
+                "expiration_duration": 120,
+                "open_violation_on_expiration": true,
+                "close_violations_on_expiration": true,
+                "nrql": {
+                  "query": "SELECT count(*) FROM JavaScriptError WHERE appName = 'browserapp'"
+                },
+                "critical": {
+                  "operator": "above",
+                  "threshold": 5.5,
+                  "threshold_duration": 300,
+                  "threshold_occurrences": "ALL"
+                },
+                "warning": {
+                  "operator": "above",
+                  "threshold": 3.5,
+                  "threshold_duration": 600,
+                  "threshold_occurrences": "ALL"
+                }
+              }
+            }'
+
+          echo "Created New Relic NRQL Alert Condition"
+
+      - name: Create New Relic Notification Destination
+        env:
+          NEW_RELIC_API_KEY: ${{ secrets.NEW_RELIC_API_KEY }}
+        run: |
+          curl -X POST 'https://api.newrelic.com/v2/alerts/notifications_channels.json' \
+            -H 'X-Api-Key: '${{ secrets.NEW_RELIC_API_KEY }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "notification_channel": {
+                "name": "email-example",
+                "type": "email",
+                "account_id": 4440025,
+                "configuration": {
+                  "recipients": "architamoudgills@gmail.com"
+                }
+              }
+            }'
+
+          echo "Created New Relic Notification Destination"
